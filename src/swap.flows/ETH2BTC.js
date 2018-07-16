@@ -39,7 +39,9 @@ class ETH2BTC extends Flow {
       isBalanceEnough: false,
       balance: null,
 
+      btcScriptCreatingTransactionHash: null,
       ethSwapCreationTransactionHash: null,
+
       isEthContractFunded: false,
 
       secret: null,
@@ -77,16 +79,19 @@ class ETH2BTC extends Flow {
       // 1. Sign swap to start
 
       () => {
-        // this.sign()
+        this.finishStep({
+          isMeSigned: true,
+        })
       },
 
       // 2. Wait participant create, fund BTC Script
 
       () => {
-        flow.swap.room.once('create btc script', ({ scriptValues }) => {
+        flow.swap.room.once('create btc script', ({ scriptValues, btcScriptCreatingTransactionHash }) => {
           flow.finishStep({
             secretHash: scriptValues.secretHash,
             btcScriptValues: scriptValues,
+            btcScriptCreatingTransactionHash,
           })
         })
       },
@@ -107,6 +112,7 @@ class ETH2BTC extends Flow {
 
       async () => {
         const { participant, buyAmount, sellAmount } = flow.swap
+        let ethSwapCreationTransactionHash
 
         // TODO move this somewhere!
         const utcNow = () => Math.floor(Date.now() / 1000)
@@ -131,12 +137,16 @@ class ETH2BTC extends Flow {
         }
 
         await this.ethSwap.create(swapData, (hash) => {
+          ethSwapCreationTransactionHash = hash
+
           flow.setState({
             ethSwapCreationTransactionHash: hash,
           })
         })
 
-        flow.swap.room.sendMessage('create eth contract')
+        flow.swap.room.sendMessage('create eth contract', {
+          ethSwapCreationTransactionHash,
+        })
 
         flow.finishStep({
           isEthContractFunded: true,
@@ -192,7 +202,7 @@ class ETH2BTC extends Flow {
 
       async () => {
         const { participant } = flow.swap
-        let { secret, isEthClosed, btcScriptValues } = flow.state
+        let { secret, btcScriptValues } = flow.state
 
         if (!btcScriptValues) {
           console.error('There is no "btcScriptValues" in state. No way to continue swap...')
@@ -238,6 +248,25 @@ class ETH2BTC extends Flow {
           return
         }
 
+        // if (!isEthClosed) {
+        //   try {
+        //     // TODO BE CAREFUL WITH CLOSE()!
+        //     // TODO if call .close() before secret received then ETH participant will lost it and never withdraw from BTC script...
+        //     await flow.ethSwap.close({
+        //       participantAddress: participant.eth.address,
+        //     })
+        //
+        //     flow.setState({
+        //       isEthClosed: true,
+        //     })
+        //   }
+        //   catch (err) {
+        //     // TODO notify user that smth goes wrong
+        //     console.error(err)
+        //     return
+        //   }
+        // }
+
         if (!isEthClosed) {
           try {
             // TODO BE CAREFUL WITH CLOSE()!
@@ -277,8 +306,6 @@ class ETH2BTC extends Flow {
   }
 
   async sign() {
-    const { participant } = this.swap
-
     this.setState({
       isSignFetching: true,
     })
@@ -289,6 +316,7 @@ class ETH2BTC extends Flow {
       isMeSigned: true,
     })
   }
+
 
   verifyBtcScript() {
     this.finishStep({
