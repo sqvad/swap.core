@@ -34,6 +34,8 @@ export default (tokenName) => {
         isParticipantSigned: false,
 
         btcScriptCreatingTransactionHash: null,
+        ethSwapCreationTransactionHash: null,
+
         secretHash: null,
         btcScriptValues: null,
 
@@ -65,10 +67,8 @@ export default (tokenName) => {
         // 1. Signs
 
         () => {
-          flow.swap.room.once('swap sign', () => {
-            flow.finishStep({
-              isParticipantSigned: true,
-            })
+          flow.finishStep({
+            isParticipantSigned: true,
           })
         },
 
@@ -88,6 +88,7 @@ export default (tokenName) => {
 
         async () => {
           const { sellAmount, participant } = flow.swap
+          let btcScriptCreatingTransactionHash
 
           // TODO move this somewhere!
           const utcNow = () => Math.floor(Date.now() / 1000)
@@ -104,6 +105,8 @@ export default (tokenName) => {
             scriptValues,
             amount: sellAmount,
           }, (hash) => {
+            btcScriptCreatingTransactionHash = hash
+
             flow.setState({
               btcScriptCreatingTransactionHash: hash,
             })
@@ -111,6 +114,7 @@ export default (tokenName) => {
 
           flow.swap.room.sendMessage('create btc script', {
             scriptValues,
+            btcScriptCreatingTransactionHash,
           })
 
           flow.finishStep({
@@ -124,6 +128,12 @@ export default (tokenName) => {
         () => {
           const { participant } = flow.swap
           let timer
+
+          flow.swap.room.once('create eth contract', ({ ethSwapCreationTransactionHash }) => {
+            flow.setState({
+              ethSwapCreationTransactionHash,
+            })
+          })
 
           const checkEthBalance = () => {
             timer = setTimeout(async () => {
