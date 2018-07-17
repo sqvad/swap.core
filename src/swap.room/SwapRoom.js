@@ -52,9 +52,9 @@ class SwapRoom extends ServiceInterface {
 
   _init({ peer, ipfsConnection }) {
     this.peer = peer
-    this.roomName = SwapApp.network == constants.NETWORKS.TESTNET
-                  ? 'testnet.swap.online'
-                  : 'swap.online'
+    this.roomName = SwapApp.isMainNet()
+                  ? 'swap.online'
+                  : 'testnet.swap.online'
 
     console.log(`Using room: ${this.roomName}`)
 
